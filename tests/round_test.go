@@ -1,13 +1,12 @@
 package tests
 
 import (
-	"github.com/sudachen/go-numerai/nuai"
+	"github.com/sudachen/go-numerai/numerai"
 	"gotest.tools/assert"
 	"testing"
 )
 
 func Test_Rounds(t *testing.T) {
-	n := &nuai.Nuai{}
-	curr := n.CurrentRound()
-	assert.Assert(t, curr.Status == nuai.OPEN)
+	curr := numerai.CurrentRound()
+	assert.Assert(t, curr.Status == numerai.OPEN)
 }

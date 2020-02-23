@@ -1,4 +1,4 @@
-package nuai
+package numerai
 
 import (
 	"time"
@@ -25,30 +25,35 @@ query $number: Int!{
 }`
 
 type RoundStatus int
+
 const (
 	CLOSE RoundStatus = iota
 	OPEN
 )
 
 type RoundInfo struct {
-	Number int
-	Status RoundStatus
-	OpenTime time.Time
+	Number    int
+	Status    RoundStatus
+	OpenTime  time.Time
 	CloseTime time.Time
 }
 
-func (nuai *Nuai) GetRoundInfo(round int) RoundInfo {
+func GetRoundInfo(round int) RoundInfo {
 	if round <= 0 {
-		return nuai.CurrentRound()
+		return CurrentRound()
 	}
-	r, err := nuai.RawQuery(roundInfoQuery,QueryArgs{"round":round})
-	if err != nil { panic( err.Error()) }
+	r, err := RawQuery(roundInfoQuery, QueryArgs{"round": round})
+	if err != nil {
+		panic(err.Error())
+	}
 	return asRoundInfo(r)
 }
 
-func (nuai *Nuai) CurrentRound() RoundInfo {
-	r, err := nuai.RawQuery(currentRoundInfoQuery, QueryArgs{})
-	if err != nil { panic(err.Error()) }
+func CurrentRound() RoundInfo {
+	r, err := RawQuery(currentRoundInfoQuery, QueryArgs{})
+	if err != nil {
+		panic(err.Error())
+	}
 	return asRoundInfo(r)
 }
 
@@ -63,7 +68,8 @@ func asRoundInfo(r QueryResult) RoundInfo {
 }
 
 func asRoundStatus(s string) RoundStatus {
-	if s == "OPEN" { return OPEN }
+	if s == "OPEN" {
+		return OPEN
+	}
 	return CLOSE
 }
-
