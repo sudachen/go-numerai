@@ -1,6 +1,7 @@
 package numerai
 
 import (
+	"github.com/sudachen/go-ml/graphql"
 	"time"
 )
 
@@ -8,17 +9,15 @@ const currentRoundInfoQuery = `
 query {
   rounds(status:OPEN) {
 	number
-	status
 	openTime
 	closeTime
   }
 }`
 
 const roundInfoQuery = `
-query $number: Int!{
+query($number:Int!){
   rounds(number: $number) {
 	number
-	status
 	openTime
 	closeTime
   }
@@ -26,50 +25,36 @@ query $number: Int!{
 
 type RoundStatus int
 
-const (
-	CLOSE RoundStatus = iota
-	OPEN
-)
-
 type RoundInfo struct {
 	Number    int
-	Status    RoundStatus
 	OpenTime  time.Time
 	CloseTime time.Time
 }
 
-func GetRoundInfo(round int) RoundInfo {
+func QueryRoundInfo(round int) (RoundInfo, error) {
 	if round <= 0 {
-		return CurrentRound()
+		return QueryCurrentRound()
 	}
-	r, err := RawQuery(roundInfoQuery, QueryArgs{"round": round})
+	r, err := graphql.DoQuery(numeraiUrl, roundInfoQuery, graphql.Args{"number": round})
 	if err != nil {
-		panic(err.Error())
+		return RoundInfo{}, nil
 	}
-	return asRoundInfo(r)
+	return asRoundInfo(r), nil
 }
 
-func CurrentRound() RoundInfo {
-	r, err := RawQuery(currentRoundInfoQuery, QueryArgs{})
+func QueryCurrentRound() (RoundInfo, error) {
+	r, err := graphql.DoQuery(numeraiUrl, currentRoundInfoQuery, graphql.Args{})
 	if err != nil {
-		panic(err.Error())
+		return RoundInfo{}, nil
 	}
-	return asRoundInfo(r)
+	return asRoundInfo(r), nil
 }
 
-func asRoundInfo(r QueryResult) RoundInfo {
+func asRoundInfo(r graphql.Result) RoundInfo {
 	v := r.Q("data").Q("rounds").Q(0)
 	return RoundInfo{
 		Number:    v.Int("number"),
-		Status:    asRoundStatus(v.String("status")),
 		OpenTime:  v.Time("openTime"),
 		CloseTime: v.Time("closeTime"),
 	}
-}
-
-func asRoundStatus(s string) RoundStatus {
-	if s == "OPEN" {
-		return OPEN
-	}
-	return CLOSE
 }

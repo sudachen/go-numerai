@@ -1,96 +1,62 @@
 package numerai
 
 import (
-	"archive/zip"
+	"fmt"
+	"github.com/sudachen/go-foo/fu"
+	"github.com/sudachen/go-foo/lazy"
+	"github.com/sudachen/go-ml/graphql"
 	"github.com/sudachen/go-ml/tables"
-	"io"
-	"net/http"
-	"os"
-	"path/filepath"
+	"github.com/sudachen/go-ml/tables/csv"
 )
 
-func GetTurnamentData(dirname string) *tables.Table {
-	if !HasDatasetsIn(dirname) {
-		if err := DownloadCurrentDatasets(dirname); err != nil {
-			panic(err.Error())
-		}
-	}
-	return nil
-}
+const (
+	TrainSubset = iota
+	ValidationSubset
+	TestSubset
+	LiveSubset
+)
 
-func GetTrainingData(dirname string) *tables.Table {
-	if !HasDatasetsIn(dirname) {
-		if err := DownloadCurrentDatasets(dirname); err != nil {
-			panic(err.Error())
-		}
-	}
-	return nil
-}
-
-const datasetZipFile = "numerai_datasets.zip"
 const datasetTrainingCSV = "numerai_training_data.csv"
-const datasetTurnamentCSV = "numerai_turnament_data.csv"
+const datasetTournamentCSV = "numerai_tournament_data.csv"
+const kazutsugiTarget = "target_kazutsugi"
+const kazutsugiPrediction = "prediction_kazutsugi"
+const supportedTournament = 8 /*kazutsugi*/
+const supportedTournamentName = "kazutsugi"
 
-func HasDatasetsIn(dirname string) bool {
-	_, err := os.Stat(filepath.Join(dirname, datasetTrainingCSV))
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(filepath.Join(dirname, datasetTurnamentCSV))
-	return err == nil
+const datasetQuery = `
+query($tournament:Int!){
+    rounds(status:OPEN,tournament:$tournament) {
+      number
+    }
+  	dataset(tournament:$tournament)
+  }
+`
+func dataset(file string) (stream lazy.Stream) {
+	return lazy.Wrap(
+		graphql.IfQuery(numeraiUrl, datasetQuery, graphql.Args{"tournament": supportedTournament},
+		func(r graphql.Result) interface{}{
+			subset := tables.Enumset{
+				"train": TrainSubset,
+				"validation": ValidationSubset,
+				"test": TestSubset,
+				"live": LiveSubset}
+			era := tables.Enumset{}
+			round := r.Q("data").Q("rounds").Q(0).Int("number")
+			url := r.Q("data").String("dataset")
+			cachefile := fmt.Sprintf("datasets/numerai/%v/numerai_datasets_%v.zip", supportedTournamentName, round)
+			return csv.Source(fu.ZipFile(file, fu.External(url, fu.Cached(cachefile))),
+				csv.String("id").As("Id"),
+				csv.Meta(subset.Integer(), "data_type").As("Subset"),
+				csv.Meta(era.Integer(), "era").As("Era"),
+				csv.Float32("feature_intelligence*").As("Feature*i"),
+				csv.Float32("feature_charisma*").As("Feature*h"),
+				csv.Float32("feature_strength*").As("Feature*s"),
+				csv.Float32("feature_dexterity*").As("Feature*d"),
+				csv.Float32("feature_constitution*").As("Feature*c"),
+				csv.Float32("feature_wisdom*").As("Feature*w"),
+				csv.Float32(kazutsugiTarget).As("Label"))()
+		}))
 }
 
-func downloadCurrentDatasetsZip(dirname string) (err error) {
-	r, err := RawQuery(`query {dataset}`, QueryArgs{})
-	if err != nil {
-		return
-	}
-	url := r.Q("data").String("dataset")
-	b, err := http.Get(url)
-	if err != nil {
-		return
-	}
-	defer b.Body.Close()
-	f, err := os.Create(filepath.Join(dirname, datasetZipFile))
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	_, err = io.Copy(f, b.Body)
-	return err
-}
-
-func unzipCurrentDatasetsZip(dirname string) (err error) {
-	r, err := zip.OpenReader(filepath.Join(dirname, datasetZipFile))
-	if err != nil {
-		return
-	}
-	for _, f := range r.File {
-		var x io.ReadCloser
-		if x, err = f.Open(); err != nil {
-			return
-		}
-		var o io.WriteCloser
-		if o, err = os.Create(filepath.Join(dirname, datasetZipFile)); err != nil {
-			return
-		}
-		defer o.Close()
-		if _, err = io.Copy(o, x); err != nil {
-			return
-		}
-	}
-	return
-}
-
-func DownloadCurrentDatasets(dirname string) (err error) {
-	if err = os.MkdirAll(dirname, 0655); err != nil {
-		return err
-	}
-	if err = downloadCurrentDatasetsZip(dirname); err != nil {
-		return
-	}
-	if err = unzipCurrentDatasetsZip(dirname); err != nil {
-		_ = os.RemoveAll(dirname)
-	}
-	return
-}
+var Tournament tables.Lazy = func() lazy.Stream { return dataset(datasetTournamentCSV) }
+var Training tables.Lazy = func() lazy.Stream { return dataset(datasetTrainingCSV) }

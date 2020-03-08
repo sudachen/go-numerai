@@ -1,7 +1,8 @@
 package numerai
 
 import (
-	"github.com/sudachen/go-fp/fu"
+	"github.com/sudachen/go-foo/fu"
+	"github.com/sudachen/go-ml/graphql"
 	"github.com/sudachen/go-ml/tables"
 	"strings"
 )
@@ -31,7 +32,7 @@ type v2LeaderBoard struct {
 var v2LeaderBoardQuery = `query { v2Leaderboard { ` + strings.Join(fu.FieldsOf((*v2LeaderBoard)(nil)), " ") + ` } }`
 
 func Leaderboard() *tables.Table {
-	r, err := RawQuery(v2LeaderBoardQuery, QueryArgs{})
+	r, err := graphql.DoQuery(numeraiUrl, v2LeaderBoardQuery, graphql.Args{})
 	if err != nil {
 		panic(err.Error())
 	}
